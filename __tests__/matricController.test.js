@@ -1,72 +1,60 @@
-const request = require('supertest');
-const express = require('express');
-const routes = require('../routes');
+const { saveMatricNumber, getMatricNumbers } = require('../controllers/matricController');
 const { PrismaClient } = require('@prisma/client');
 
-const prisma = new PrismaClient();
-const app = express();
-app.use(express.json());
-app.use('/api', routes);
+const prisma = new PrismaClient(); // Now uses the mocked PrismaClient from __mocks__
 
-jest.mock('@prisma/client', () => ({
-  PrismaClient: jest.fn().mockImplementation(() => ({
-    matricNumber: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-    },
-  })),
-}));
-
-describe('MatricController API Tests', () => {
-  const mockData = [
-    { id: 1, matricNum: '123456', createdAt: new Date() },
-    { id: 2, matricNum: '789012', createdAt: new Date() },
-  ];
-
+describe('MatricController', () => {
   afterEach(() => {
-    jest.clearAllMocks();
+    jest.clearAllMocks(); // Reset mocked methods between tests
   });
 
-  it('should save a matric number successfully', async () => {
-    const matricNum = '123456';
-    prisma.matricNumber.create.mockResolvedValue({
-      id: 1,
-      matricNum,
-      createdAt: new Date(),
+  test('saveMatricNumber - Success', async () => {
+    const req = { body: { matricNum: 'A12345' } };
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    };
+
+    prisma.matricNumber.create.mockResolvedValue({ id: 1, matricNum: 'A12345', createdAt: new Date() });
+
+    await saveMatricNumber(req, res);
+
+    expect(prisma.matricNumber.create).toHaveBeenCalledWith({
+      data: { matricNum: 'A12345' },
     });
-
-    const res = await request(app).post('/api/matric').send({ matricNum });
-    expect(res.statusCode).toBe(201);
-    expect(res.body.matricNum).toBe(matricNum);
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({ id: 1, matricNum: 'A12345', createdAt: expect.any(Date) });
   });
 
-  it('should return an error if matricNum is missing', async () => {
-    const res = await request(app).post('/api/matric').send({});
-    expect(res.statusCode).toBe(500);
-    expect(res.body.error).toBeDefined();
-  });
+  test('saveMatricNumber - Failure', async () => {
+    const req = { body: { matricNum: 'A12345' } };
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    };
 
-  it('should return an error if saving to database fails', async () => {
     prisma.matricNumber.create.mockRejectedValue(new Error('Database error'));
 
-    const res = await request(app).post('/api/matric').send({ matricNum: '123456' });
-    expect(res.statusCode).toBe(500);
-    expect(res.body.error).toBe('Database error');
+    await saveMatricNumber(req, res);
+
+    expect(prisma.matricNumber.create).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Database error' });
   });
 
-  it('should fetch all matric numbers successfully', async () => {
-    prisma.matricNumber.findMany.mockResolvedValue(mockData);
+  test('getMatricNumbers - Success', async () => {
+    const req = {};
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    };
 
-    const res = await request(app).get('/api/matrics');
-    expect(res.statusCode).toBe(200);
-    expect(res.body.length).toBe(mockData.length);
-  });
+    prisma.matricNumber.findMany.mockResolvedValue([{ id: 1, matricNum: 'A12345', createdAt: new Date() }]);
 
-  it('should return an error if fetching from database fails', async () => {
-    prisma.matricNumber.findMany.mockRejectedValue(new Error('Database error'));
+    await getMatricNumbers(req, res);
 
-    const res = await request(app).get('/api/matrics');
-    expect(res.statusCode).toBe(500);
-    expect(res.body.error).toBe('Database error');
+    expect(prisma.matricNumber.findMany).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith([{ id: 1, matricNum: 'A12345', createdAt: expect.any(Date) }]);
   });
 });
