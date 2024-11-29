@@ -1,64 +1,62 @@
 const jwt = require('jsonwebtoken');
 const authenticateToken = require('../middleware/auth');
 
-jest.mock('jsonwebtoken', () => ({
-  verify: jest.fn(),
-}));
+jest.mock('jsonwebtoken');
 
-describe('Auth Middleware Tests', () => {
+describe('authenticateToken Middleware', () => {
+  let req, res, next;
+
+  beforeEach(() => {
+    req = { header: jest.fn() };
+    res = {
+      status: jest.fn().mockReturnThis(),
+      send: jest.fn(),
+    };
+    next = jest.fn();
+  });
+
   afterEach(() => {
     jest.clearAllMocks();
   });
 
-  it('should pass when a valid token is provided', () => {
-    const req = { header: jest.fn().mockReturnValue('Bearer validToken') };
-    const res = {};
-    const next = jest.fn();
-
-    jwt.verify.mockImplementation((token, secret, callback) => {
-      callback(null, { userId: 1 });
-    });
+  test('Valid Token', () => {
+    const user = { id: 1, name: 'Test User' };
+    const token = 'valid-token';
+    req.header.mockReturnValue(`Bearer ${token}`);
+    jwt.verify.mockReturnValue(user);
 
     authenticateToken(req, res, next);
-    expect(req.user).toEqual({ userId: 1 });
+
+    expect(req.header).toHaveBeenCalledWith('Authorization');
+    expect(jwt.verify).toHaveBeenCalledWith(token, process.env.JWT_SECRET);
+    expect(req.user).toEqual(user);
     expect(next).toHaveBeenCalled();
   });
 
-  it('should return 401 when no token is provided', () => {
-    const req = { header: jest.fn() };
-    const res = { status: jest.fn().mockReturnThis(), send: jest.fn() };
-    const next = jest.fn();
+  test('No Token', () => {
+    req.header.mockReturnValue(undefined);
 
     authenticateToken(req, res, next);
+
+    expect(req.header).toHaveBeenCalledWith('Authorization');
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.send).toHaveBeenCalledWith('Access Denied');
+    expect(next).not.toHaveBeenCalled();
   });
 
-  it('should return 400 when the token is invalid', () => {
-    const req = { header: jest.fn().mockReturnValue('Bearer invalidToken') };
-    const res = { status: jest.fn().mockReturnThis(), send: jest.fn() };
-    const next = jest.fn();
-
+  test('Invalid Token', () => {
+    const token = 'invalid-token';
+    req.header.mockReturnValue(`Bearer ${token}`);
     jwt.verify.mockImplementation(() => {
-      throw new Error('Invalid Token');
+      throw new Error('Invalid token');
     });
 
     authenticateToken(req, res, next);
+
+    expect(req.header).toHaveBeenCalledWith('Authorization');
+    expect(jwt.verify).toHaveBeenCalledWith(token, process.env.JWT_SECRET);
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.send).toHaveBeenCalledWith('Invalid Token');
-  });
-
-  it('should return 401 when token verification fails', () => {
-    const req = { header: jest.fn().mockReturnValue('Bearer invalidToken') };
-    const res = { status: jest.fn().mockReturnThis(), send: jest.fn() };
-    const next = jest.fn();
-
-    jwt.verify.mockImplementation((token, secret, callback) => {
-      callback(new Error('Token verification failed'), null);
-    });
-
-    authenticateToken(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.send).toHaveBeenCalledWith('Access Denied');
+    expect(next).not.toHaveBeenCalled();
   });
 });
